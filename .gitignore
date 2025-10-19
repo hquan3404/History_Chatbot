@@ -1,0 +1,23 @@
+
+# Ignore created / temporary folders and virtual environments
+deleted/
+venv/
+
+# Ignore large local data folder used during development
+data_pipeline/data/
+
+# Backend environment file (contains secrets)
+backend/.env
+
+# Common Python ignores
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+env/
+ENV/
+venv.bak/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+

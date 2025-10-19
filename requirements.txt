@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+transformers>=4.51.0
+accelerate
+torch
+pydantic
+sentence-transformers 
+faiss-cpu
+ctransformers
+langchain
+langchain-community
+pypdf
+openai
+numpy
+langchain-huggingface
+langchain-cohere
+ipywidgets
