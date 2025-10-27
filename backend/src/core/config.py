@@ -32,8 +32,7 @@ GENERATION_MODEL_NAME = 'gemini-2.5-flash'
 SEMANTIC_WEIGHT = 0.5
 KEYWORD_WEIGHT = 0.5
 
-# --- VALIDATION ---
-# Kiểm tra để đảm bảo API Key đã được thiết lập
-if not GEMINI_API_KEY:
-    raise ValueError("Lỗi: Biến môi trường 'GEMINI_API_KEY' chưa được thiết lập. "
-                     "Vui lòng kiểm tra lại file .env của bạn.")
+# Ollama
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL_NAME", "qwen3:1.7b")
+

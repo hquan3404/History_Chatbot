@@ -1,4 +1,3 @@
-# ==================== IMPORTS ====================
 import numpy as np
 import pickle
 import re
@@ -8,17 +7,11 @@ import json
 from typing import List, Dict, Any, Literal
 from dataclasses import dataclass, asdict
 from collections import Counter
-try:
-    import tiktoken
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    print("Warning: Một số thư viện chưa được cài đặt. Vui lòng chạy:")
-    print("pip install numpy tiktoken sentence-transformers")
-    exit()
+import tiktoken
+from sentence_transformers import SentenceTransformer
 from .chunking import Chunk
 from .embedding import EmbeddingPipeline, EmbeddedChunk
-# ==================== BM25 CLASS ====================
-# (Giữ nguyên không thay đổi)
+# BM25 CLASS
 class BM25:
     """
     BM25 algorithm cho keyword-based retrieval
@@ -61,7 +54,7 @@ class BM25:
                 scores[idx] += idf * (numerator / denominator)
         return scores
 
-# ==================== HYBRID RETRIEVER CLASS ====================
+# HYBRID RETRIEVER
 class HybridRetriever:
     """
     Hybrid Retriever kết hợp Semantic + Keyword search

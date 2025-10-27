@@ -15,3 +15,6 @@ numpy
 langchain-huggingface
 langchain-cohere
 ipywidgets
+tiktoken
+google-generative-ai
+python-dotenv

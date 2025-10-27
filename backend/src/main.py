@@ -1,126 +1,71 @@
-# from fastapi import FastAPI
-# from pydantic import BaseModel
-# import os
-
-# # Import các thành phần từ app
-# from .core import config
-# from .services.embedding import EmbeddingPipeline
-# from .services.retrieval import HybridRetriever
-
-# # --- KHỞI TẠO CÁC ĐỐI TƯỢNG KHI SERVER BẮT ĐẦU ---
-
-# # Kiểm tra xem file embedding có tồn tại không
-# if not os.path.exists(config.EMBEDDINGS_FILE_PATH):
-#     print("="*80)
-#     print(f"LỖI: File embedding '{config.EMBEDDINGS_FILE_PATH}' không tồn tại.")
-#     print("Vui lòng chạy script tiền xử lý trước khi khởi động server:")
-#     print("python scripts/preprocess_data.py")
-#     print("="*80)
-#     exit()
-
-# # Tải các model và dữ liệu (chỉ một lần)
-# print("--- Khởi tạo Server ---")
-# print("1. Tải embedding pipeline...")
-# pipeline = EmbeddingPipeline(model_name=config.EMBEDDING_MODEL_NAME)
-
-# print(f"2. Tải dữ liệu chunks đã được embed từ '{config.EMBEDDINGS_FILE_PATH}'...")
-# embedded_chunks = pipeline.load_embeddings(config.EMBEDDINGS_FILE_PATH)
-
-# print("3. Khởi tạo retriever...")
-# retriever = HybridRetriever(
-#     embedded_chunks=embedded_chunks,
-#     embedding_pipeline=pipeline,
-#     semantic_weight=config.SEMANTIC_WEIGHT,
-#     keyword_weight=config.KEYWORD_WEIGHT
-# )
-# print("✅ Server đã sẵn sàng nhận yêu cầu!")
-# print("-" * 25)
-
-# # Khởi tạo FastAPI app
-# app = FastAPI(title="Lich Su Vietnam RAG API")
-
-# # --- ĐỊNH NGHĨA API ENDPOINTS ---
-
-# class QueryRequest(BaseModel):
-#     query: str
-#     top_k: int = 5
-
-# @app.get("/")
-# def read_root():
-#     return {"message": "Welcome to the Vietnamese History RAG API!"}
-
-# @app.post("/api/v1/chat")
-# def chat_with_history(request: QueryRequest):
-#     """
-#     Nhận câu hỏi từ người dùng và trả về các chunk liên quan nhất.
-#     """
-#     print(f"Received query: '{request.query}' with top_k={request.top_k}")
-    
-#     results = retriever.retrieve_with_rerank(
-#         query=request.query, 
-#         top_k=request.top_k,
-#         candidate_k=20 # candidate_k có thể được cấu hình nếu muốn
-#     )
-    
-#     return {"query": request.query, "results": results}
-
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import os
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Dict, Optional
+
 from .core import config
 from .services.embedding import EmbeddingPipeline
 from .services.retrieval import HybridRetriever
-from .services.generation import GeminiRAGGenerator
+from .services.generation import (
+    BaseRAGGenerator, 
+    GeminiRAGGenerator, 
+    QwenOllamaGenerator,
+    log_retrieved_chunks 
+)
 
-# Kiểm tra xem file embedding
-if not os.path.exists(config.EMBEDDINGS_FILE_PATH):
-    print("="*80)
-    print(f"LỖI: File embedding '{config.EMBEDDINGS_FILE_PATH}' không tồn tại.")
-    print("Vui lòng chạy script tiền xử lý trước khi khởi động server:")
-    print("python scripts/preprocess_data.py")
-    print("="*80)
-    exit()
-
-# --- KHỞI TẠO CÁC ĐỐI TƯỢNG SINGLETON KHI SERVER BẮT ĐẦU ---
-print("--- Khởi tạo Server ---")
-
-print("1. Tải embedding pipeline...")
+print("load embedding...")
 embedding_pipeline = EmbeddingPipeline(model_name=config.EMBEDDING_MODEL_NAME)
-
-print(f"2. Tải dữ liệu chunks đã được embed từ '{config.EMBEDDINGS_FILE_PATH}'...")
+print(f"load data embedding... '{config.EMBEDDINGS_FILE_PATH}'...")
 embedded_chunks = embedding_pipeline.load_embeddings(config.EMBEDDINGS_FILE_PATH)
-
-print("3. Khởi tạo retriever...")
+print("create retriever...")
 retriever = HybridRetriever(
     embedded_chunks=embedded_chunks,
     embedding_pipeline=embedding_pipeline,
     semantic_weight=config.SEMANTIC_WEIGHT,
     keyword_weight=config.KEYWORD_WEIGHT
 )
-
-print("4. Khởi tạo Gemini RAG Generator...")
-generator = GeminiRAGGenerator()
-
-print("Server đã sẵn sàng nhận yêu cầu!")
-print("-" * 25)
+print("create generators...")
+generators: Dict[str, BaseRAGGenerator] = {
+    "gemini": GeminiRAGGenerator(),
+    "qwen": QwenOllamaGenerator()
+}
+print("Gemini Generator Loaded.")
+print("Qwen Generator Loaded.")
 
 # Khởi tạo FastAPI app
 app = FastAPI(title="Lich Su Vietnam RAG API")
-origins = ["*"] # Cho phép tất cả các nguồn
+
+origins = [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], # Cho phép tất cả các phương thức (GET, POST, etc.)
-    allow_headers=["*"], # Cho phép tất cả các header
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# --- ĐỊNH NGHĨA API ENDPOINTS ---
+
+#API ENDPOINTS
 
 class QueryRequest(BaseModel):
     query: str
-    top_k: int = 5 # Số lượng context chunk muốn truy xuất
+    top_k: int = 5 
+    model: str = "gemini"
+
+# Pydantic model cho Quiz Request
+class QuizRequest(BaseModel):
+    topic: Optional[str] = None 
+    k: int = 3 # k câu hỏi
+    model: str = "gemini"
 
 @app.get("/")
 def read_root():
@@ -128,23 +73,25 @@ def read_root():
 
 @app.post("/api/v1/chat")
 def chat_with_history(request: QueryRequest):
-    """
-    Endpoint chính để thực hiện RAG: nhận câu hỏi, truy xuất ngữ cảnh và sinh câu trả lời.
-    """
-    print(f"Received query: '{request.query}' with top_k={request.top_k}")
-
-    if not generator.model:
+    print(f"Received query: '{request.query}' with top_k={request.top_k}, model='{request.model}'")
+    generator_to_use = generators.get(request.model)
+    if not generator_to_use:
         raise HTTPException(
-            status_code=500, 
-            detail="Dịch vụ sinh câu trả lời không khả dụng. Vui lòng kiểm tra cấu hình server."
+            status_code=400, 
+            detail=f"Model '{request.model}' không hợp lệ. Chỉ chấp nhận 'gemini' hoặc 'qwen'."
         )
     
-    # RETRIEVAL - Lấy các chunk ngữ cảnh liên quan
+    if not generator_to_use.is_ready():
+        raise HTTPException(
+            status_code=500,
+            detail=f"hệ thống sinh câu trả lời cho model '{request.model}' không khả dụng. Kiểm tra log server."
+        )
+    
     print(f"Đang truy xuất {request.top_k} chunk liên quan...")
     retrieved_chunks = retriever.retrieve_with_rerank(
         query=request.query, 
         top_k=request.top_k,
-        candidate_k=20 # Lấy 20 ứng viên ban đầu để rerank
+        candidate_k=20 
     )
     
     if not retrieved_chunks:
@@ -156,11 +103,68 @@ def chat_with_history(request: QueryRequest):
             }
         }
 
-    # GENERATION - Dùng context và query để sinh câu trả lời
-    print("Đang sinh câu trả lời từ các chunk đã truy xuất...")
-    final_response = generator.generate_answer(
+    log_retrieved_chunks(request.query, retrieved_chunks)
+
+    print(f"Đang sinh câu trả lời (sử dụng model {request.model})...")
+    
+    final_response = generator_to_use.generate_answer(
         query=request.query,
         context_chunks=retrieved_chunks
     )
     
     return {"query": request.query, "response": final_response}
+
+# endpoint sinh câu hỏi trắc nghiệm
+@app.post("/api/v1/generate_quiz")
+def generate_quiz(request: QuizRequest):
+    print(f"Received quiz request: k={request.k}, topic='{request.topic}', model='{request.model}'")
+    # Chọn Generator
+    generator_to_use = generators.get(request.model)
+
+    if not generator_to_use:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{request.model}' không hợp lệ. Chỉ chấp nhận 'gemini' hoặc 'qwen'."
+        )
+    
+    if not generator_to_use.is_ready():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dịch vụ sinh câu trả lời cho model '{request.model}' không khả dụng."
+        )
+
+    # Lấy Ngữ cảnh
+    # Nếu không có topic, dùng 1 query chung để lấy chunk ngẫu nhiên
+    if not request.topic or request.topic.strip() == "":
+        query_for_retrieval = "Các sự kiện lịch sử Việt Nam 1954-1975"
+        print("Không có chủ đề, dùng query ngẫu nhiên...")
+    else:
+        query_for_retrieval = request.topic
+    
+    # Lấy 5 chunk để làm ngữ cảnh
+    print(f"Đang truy xuất 5 chunk cho chủ đề: '{query_for_retrieval}'...")
+    retrieved_chunks = retriever.retrieve_with_rerank(
+        query=query_for_retrieval, 
+        top_k=5, 
+        candidate_k=20
+    )
+    
+    if not retrieved_chunks:
+        return {
+            "status": "error",
+            "message": "Rất tiếc, tôi không tìm thấy bất kỳ tài liệu nào liên quan đến chủ đề này."
+        }
+    
+    log_retrieved_chunks(query_for_retrieval, retrieved_chunks)
+
+    # Sinh Câu hỏi
+    print(f"Đang sinh {request.k} câu hỏi trắc nghiệm (sử dụng model {request.model})...")
+    
+    quiz_response = generator_to_use.generate_quiz(
+        context_chunks=retrieved_chunks,
+        k=request.k
+    )
+    
+    # quiz_response có dạng {"status": "...", "questions": ...} hoặc {"status": "error", "message": ...}
+    return quiz_response
+
